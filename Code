@@ -1,0 +1,326 @@
+import asyncio
+import aiohttp
+import logging
+from bs4 import BeautifulSoup
+from twilio.rest import Client
+import re
+import html
+
+# User Management
+users = {}
+subscriptions = {}
+user_profiles = {}
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Register a new user
+def register_user(username, password, phone_number, subscription_level):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Username must be alphanumeric and between 3-20 characters.")
+    if username in users:
+        raise ValueError("Username already exists. Please choose a different username.")
+    if not re.match("^[a-zA-Z0-9!@#$%^&*()_]{8,20}$", password):
+        raise ValueError("Invalid password. Password must be alphanumeric and between 8-20 characters.")
+    if not re.match("^\+\d{1,3}\d{10}$", phone_number):
+        raise ValueError("Invalid phone number. Please provide a valid phone number starting with a '+' sign.")
+    if subscription_level not in ["free", "premium"]:
+        raise ValueError("Invalid subscription level. Available options: 'free' or 'premium'.")
+
+    try:
+        username = html.escape(username)
+        password = html.escape(password)
+        phone_number = html.escape(phone_number)
+
+        users[username] = password
+        subscriptions[username] = subscription_level
+        user_profiles[username] = {
+            "phone_number": phone_number,
+            "subscription_level": subscription_level
+        }
+        logger.info(f"User '{username}' registered successfully!")
+        return True
+    except Exception as e:
+        logger.error(f"Error occurred while registering user '{username}': {str(e)}")
+        raise
+
+# User login
+def login(username, password):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Username must be alphanumeric and between 3-20 characters.")
+    if not re.match("^[a-zA-Z0-9!@#$%^&*()_]{8,20}$", password):
+        raise ValueError("Invalid password. Password must be alphanumeric and between 8-20 characters.")
+
+    try:
+        username = html.escape(username)
+        password = html.escape(password)
+
+        if username in users and users[username] == password:
+            logger.info(f"Logged in as '{username}'")
+            return True
+        raise ValueError("Invalid username or password. Please register or provide valid credentials.")
+    except Exception as e:
+        logger.error(f"Error occurred while logging in: {str(e)}")
+        raise
+
+# Update user subscription level
+def update_subscription(username, subscription_level):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+    if subscription_level not in ["free", "premium"]:
+        raise ValueError("Invalid subscription level. Available options: 'free' or 'premium'.")
+
+    try:
+        username = html.escape(username)
+
+        if username in users:
+            subscriptions[username] = subscription_level
+            user_profiles[username]["subscription_level"] = subscription_level
+            logger.info(f"Subscription level updated for user '{username}'")
+            return True
+        raise ValueError("Invalid username. Please provide a valid username.")
+    except Exception as e:
+                logger.error(f"Error occurred while updating subscription for user '{username}': {str(e)}")
+        raise
+
+# Update user profile
+def update_user_profile(username, phone_number):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+    if not re.match("^\+\d{1,3}\d{10}$", phone_number):
+        raise ValueError("Invalid phone number. Please provide a valid phone number starting with a '+' sign.")
+
+    try:
+        username = html.escape(username)
+        phone_number = html.escape(phone_number)
+
+        if username in users:
+            user_profiles[username]["phone_number"] = phone_number
+            logger.info(f"User profile updated for '{username}'")
+            return True
+        raise ValueError("Invalid username. Please provide a valid username.")
+    except Exception as e:
+        logger.error(f"Error occurred while updating user profile for '{username}': {str(e)}")
+        raise
+
+# Scrape the latest stock market data
+async def scrape_stock_data(url):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                content = await response.text()
+        soup = BeautifulSoup(content, 'lxml')
+        stock_price = soup.find('div', class_='stock-price').text
+        return stock_price
+    except (aiohttp.ClientError, ValueError, AttributeError) as e:
+        logger.error(f"Error occurred while scraping data: {str(e)}")
+        return None
+
+# Send SMS notifications with stock updates
+async def send_stock_updates(account_sid, auth_token, from_number, to_number, stock_price):
+    try:
+        client = Client(account_sid, auth_token)
+        message = await client.messages.create(
+            body=f"The current stock price is {stock_price}",
+            from_=from_number,
+            to=to_number
+        )
+        logger.info(f"Sent SMS with stock update: {message.sid}")
+    except Exception as e:
+        logger.error(f"Error occurred while sending SMS: {str(e)}")
+        raise
+
+
+# Premium Feature: Personalized Watchlist
+def personalize_watchlist(username):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+
+    try:
+        username = html.escape(username)
+
+        if username in users:
+            subscription_level = subscriptions[username]
+            if subscription_level == "premium":
+                # Implement personalized watchlist functionality for premium users
+                logger.info(f"Creating personalized watchlist for user '{username}'")
+            else:
+                logger.info("Premium feature. Upgrade to access personalized watchlist.")
+        else:
+            logger.info("Invalid username. Please provide a valid username.")
+    except Exception as e:
+        logger.error(f"Error occurred while personalizing watchlist for user '{username}': {str(e)}")
+        raise
+
+# Premium Feature: Advanced Analytics
+def perform_advanced_analytics(username):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+
+    try:
+        username = html.escape(username)
+
+        if username in users:
+            subscription_level = subscriptions[username]
+            if subscription_level == "premium":
+                # Implement advanced analytics functionality for premium users
+                logger.info(f"Performing advanced analytics for user '{username}'")
+            else:
+                logger.info("Premium feature. Upgrade to access advanced analytics.")
+        else:
+                    logger.info("Invalid username. Please provide a valid username.")
+    except Exception as e:
+        logger.error(f"Error occurred while performing advanced analytics for user '{username}': {str(e)}")
+        raise
+
+# Billing and Payment Integration
+class PaymentProcessingError(Exception):
+    pass
+
+def process_payment(username, payment_details):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+
+    try:
+        username = html.escape(username)
+
+        # Validate payment details
+        amount = payment_details.get("amount")
+        currency = payment_details.get("currency")
+        payment_method = payment_details.get("payment_method")
+
+        if not isinstance(amount, float) or amount <= 0:
+            raise ValueError("Invalid amount. Please provide a positive floating-point number.")
+        if not isinstance(currency, str) or not (1 <= len(currency) <= 3):
+            raise ValueError("Invalid currency. Please provide a string with a length between 1 and 3.")
+        if not isinstance(payment_method, str) or not payment_method.strip():
+            raise ValueError("Invalid payment method. Please provide a non-empty string.")
+
+        # Simulate payment processing logic
+        if payment_method == "credit_card":
+            # Process payment using credit card
+            if amount < 100:
+                raise PaymentProcessingError("Payment failed: Insufficient amount.")
+            logger.info(f"Payment processed successfully for user '{username}'.")
+            return "payment_success"
+        else:
+            # Unsupported payment method
+            raise PaymentProcessingError("Payment failed: Unsupported payment method.")
+    except ValueError as e:
+        logger.error(f"ValueError occurred while processing payment for user '{username}': {str(e)}")
+        return "payment_failed"
+    except PaymentProcessingError as e:
+        logger.error(f"{str(e)}")
+        return "payment_failed"
+    except Exception as e:
+        logger.error(f"Error occurred while processing payment for user '{username}': {str(e)}")
+        return "payment_failed"
+
+
+
+# Upgrade and Downgrade Subscription Levels
+def upgrade_subscription(username):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+
+    try:
+        username = html.escape(username)
+
+        if username in users:
+            current_subscription = subscriptions[username]
+            # Implement logic to upgrade the subscription level
+            if current_subscription == "free":
+                update_subscription(username, "premium")
+                logger.info(f"User '{username}' upgraded to premium subscription.")
+            else:
+                logger.info("Upgrade not available. User is already on premium subscription.")
+        else:
+            logger.info("Invalid username. Please provide a valid username.")
+    except Exception as e:
+        logger.error(f"Error occurred while upgrading subscription for user '{username}': {str(e)}")
+        raise
+
+def downgrade_subscription(username):
+    if not re.match("^[a-zA-Z0-9_]{3,20}$", username):
+        raise ValueError("Invalid username. Please provide a valid username.")
+
+    try:
+        username = html.escape(username)
+
+        if username in users:
+            current_subscription = subscriptions[username]
+            # Implement logic to downgrade the subscription level
+            if current_subscription == "premium":
+                update_subscription(username, "free")
+                logger.info(f"User '{username}' downgraded to free subscription.")
+            else:
+                logger.info("Downgrade not available. User is already on free subscription.")
+        else:
+            logger.info("Invalid username. Please provide a valid username.")
+    except Exception as e:
+        logger.error(f"Error occurred while downgrading subscription for user '{username}': {str(e)}")
+        raise
+
+# Main script execution
+async def main():
+    # Configuration
+    url = 'https://www.example.com/stock-market-data'
+    account_sid = 'your_twilio_account_sid'
+    auth_token = 'your_twilio_auth_token'
+    from_number = '+1234567890'  # Your Twilio phone number
+
+    # User registration and login
+    try:
+        register_user("user1", "password1", "+0987654321", "free")
+        login("user1", "password1")
+
+        # Upgrade subscription level
+        upgrade_subscription("user1")
+
+        # Update user profile
+        update_user_profile("user1", "+1234567890")
+
+        # Scrape stock market data
+        stock_price = await scrape_stock_data(url)
+        if stock_price is not None:
+            # Send SMS notifications
+            tasks = []
+            for username, profile in user_profiles.items():
+                subscription_level = profile["subscription_level"]
+                if subscription_level == "premium":
+                    tasks.append(
+                        send_stock_updates(account_sid, auth_token, from_number, profile["phone_number"], stock_price)
+                    )
+                                       tasks.append(
+                        send_stock_updates(account_sid, auth_token, from_number, profile["phone_number"], stock_price)
+                    )
+            await asyncio.gather(*tasks)
+
+            # Perform advanced analytics for a specific user
+            perform_advanced_analytics("user1")
+
+            # Personalize watchlist for a specific user
+            personalize_watchlist("user1")
+
+            # Process payment for a user
+            payment_details = {
+                "amount": 100.0,
+                "currency": "USD",
+                "payment_method": "credit_card"
+            }
+            process_payment("user1", payment_details)
+
+            # Downgrade subscription level
+            downgrade_subscription("user1")
+        else:
+            logger.error("Failed to scrape stock market data.")
+    except ValueError as e:
+        logger.error(f"ValueError occurred: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error occurred: {str(e)}")
+
+# Run the main script
+if __name__ == "__main__":
+    asyncio.run(main())
